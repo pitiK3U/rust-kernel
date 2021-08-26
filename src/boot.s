@@ -13,7 +13,7 @@ MBOOT_CHECKSUM      equ -(MBOOT_HEADER_MAGIC + MBOOT_HEADER_FLAGS)
 
 [BITS 32]
 
-[GLOBAL multiboot]                  ; Make 'mboot' accessible from C.
+[GLOBAL multiboot]              ; Make 'mboot' accessible from C.
 [EXTERN code]                   ; Start of the '.text' section.
 [EXTERN bss]                    ; Start of the .bss section.
 [EXTERN end]                    ; End of the last loadable section.
@@ -38,8 +38,13 @@ start:
 
   ; Execute the kernel:
   cli                           ; Disable interrupts.
+  mov esp, init_stack           ; Enable stack
   call _start                   ; call our main() function.
   jmp $                         ; Enter an infinite loop, to stop the processor
                                 ; executing whatever rubbish is in the memory
                                 ; after our kernel! 
+
+section .bss
+  resb 0x1000*2
+init_stack:
 
