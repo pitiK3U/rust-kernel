@@ -29,18 +29,14 @@ fn panic(_panic: &PanicInfo<'_>) -> ! {
 #[lang = "eh_personality"]
 extern "C" fn eh_personality() {}
 
-static HELLO: &[u8] = b"Hello\n\n\n\nWorld";
+static HELLO: &[u8] = b"Hello\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nasdf\rWorld";
 
 /// Initial kernel function that gets called by `src/boot.s`.
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    let mut buf: monitor::VGA::Monitor = unsafe { monitor::VGA::BUFFER.take() };
+    monitor::VGA::Monitor::clear();
 
-    buf.clear();
-
-    for byte in HELLO.iter() {
-        buf.write_byte(*byte);
-    }
+    monitor::VGA::Monitor::write_str(HELLO);
 
     loop {}
 }
