@@ -8,7 +8,9 @@
 
 
 mod monitor;
+use monitor::VGA::*;
 
+mod essentials;
 
 // dev profile: easier to debug panics; can put a breakpoint on `rust_begin_unwind`
 // #[cfg(debug_assertions)]
@@ -34,9 +36,12 @@ static HELLO: &[u8] = b"Hello\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nasd
 /// Initial kernel function that gets called by `src/boot.s`.
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    monitor::VGA::Monitor::clear();
+    Monitor::set_background_color(&Color::Black);
+    Monitor::set_foreground_color(&Color::White);
 
-    monitor::VGA::Monitor::write_str(HELLO);
+    Monitor::clear();
+
+    Monitor::write_str(HELLO);
 
     loop {}
 }

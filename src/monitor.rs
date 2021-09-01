@@ -1,34 +1,7 @@
-/// Enables use of `static`s as global variables.
-///
-/// Usage:
-/// ```
-/// let mut inner = unsafe { SINGLETON.take() };
-/// inner.method();
-/// unsafe { SINGLETON.give(inner); }
-/// ```
-pub struct Singleton<T> {
-    pub inner: Option<T>,
-}
-
-impl<T> Singleton<T> {
-    /// Takes ownership of singleton's inner value.
-    /// If the inner value is already taken, program crashes.
-    pub fn take(&mut self) -> T {
-        let p = core::mem::replace(&mut self.inner, None);
-        // TODO: better double take handling
-        p.unwrap()
-    }
-
-    /// Returns taken value from singleton to the singleton
-    /// for next use.
-    pub fn give(&mut self, inner: T) {
-        let _ = core::mem::replace(&mut self.inner, Some(inner));
-    }
-}
-
 /// Module that implements basic VGA functions.
+#[allow(non_snake_case)]
 pub mod VGA {
-    use crate::monitor::Singleton;
+    use crate::essentials::Singleton;
 
     /// VGA display width in number of characters.
     const COLUMNS: u8 = 80;
@@ -126,6 +99,26 @@ pub mod VGA {
     }
 
     impl Monitor {
+        /// Sets backgound color for writes to vga.
+        #[inline(always)]
+        pub fn set_background_color(color: &Color) {
+            let mut monitor: Self = unsafe { BUFFER.take() };
+
+            monitor.background_color = color.clone();
+
+            unsafe { BUFFER.give(monitor); }
+        }
+
+        /// Sets foreground color for writes to vga.
+        #[inline(always)]
+        pub fn set_foreground_color(color: &Color) {
+            let mut monitor: Self = unsafe { BUFFER.take() };
+
+            monitor.foreground_color = color.clone();
+
+            unsafe { BUFFER.give(monitor); }
+        }
+
         /// Fills the full screen (`ROWS * COLUMNS`) with blank (`' '`) character
         /// and sets cursor position to top left corner.
         pub fn clear() {
