@@ -6,11 +6,15 @@
 
 #![warn(missing_docs)]
 
+extern crate bit_field;
+
 
 mod monitor;
 use monitor::VGA::*;
 
 mod essentials;
+
+mod interrupts;
 
 // dev profile: easier to debug panics; can put a breakpoint on `rust_begin_unwind`
 // #[cfg(debug_assertions)]
@@ -36,6 +40,8 @@ static HELLO: &[u8] = b"Hello\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nasd
 /// Initial kernel function that gets called by `src/boot.s`.
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    interrupts::IDT::init();
+
     Monitor::set_background_color(&Color::Black);
     Monitor::set_foreground_color(&Color::White);
 
