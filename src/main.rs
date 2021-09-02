@@ -4,17 +4,27 @@
 #![no_std]
 #![no_main]
 
+#![feature(custom_test_frameworks)]
+#![test_runner(crate::test_runner)]
+#![reexport_test_harness_main = "test_main"]
+
+#![feature(const_mut_refs)]
+#![feature(const_raw_ptr_deref)]
+
 #![warn(missing_docs)]
 
 extern crate bit_field;
 
 
 mod monitor;
-use monitor::VGA::*;
 
 mod essentials;
 
 mod interrupts;
+
+mod port;
+
+mod test;
 
 // dev profile: easier to debug panics; can put a breakpoint on `rust_begin_unwind`
 // #[cfg(debug_assertions)]
@@ -35,20 +45,47 @@ fn panic(_panic: &PanicInfo<'_>) -> ! {
 #[lang = "eh_personality"]
 extern "C" fn eh_personality() {}
 
-static HELLO: &[u8] = b"Hello\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nasdf\rWorld";
+static HELLO: &str = "Hello\tWöorld\n";
 
 /// Initial kernel function that gets called by `src/boot.s`.
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    use monitor::VGA::*;
+
     interrupts::IDT::init();
 
-    Monitor::set_background_color(&Color::Black);
-    Monitor::set_foreground_color(&Color::White);
+    let mut writer = BUFFER.lock();
 
-    Monitor::clear();
+    writer.set_background_color(&Color::Black);
+    writer.set_foreground_color(&Color::White);
 
-    Monitor::write_str(HELLO);
+    writer.clear();
+
+    writer.write_str(HELLO);
+
+    #[cfg(test)]
+    test_main();
 
     loop {}
+}
+
+#[cfg(test)]
+fn test_runner(tests: &[&dyn Fn()]) {
+    // println!("Running {} tests", tests.len());
+    Monitor::write_str("\nRunning tests\n");
+    for test in tests {
+        test();
+    }
+
+    test::exit_qemu(QemuExitCode::Success);
+}
+
+#[test_case]
+fn trivial_assertion() {
+    //print!("trivial assertion... ");
+    Monitor::write_str("trivial assertion... ");
+    assert_eq!(1, 1);
+    //println!("[ok]");
+    Monitor::write_str("[ok]\n");
 }
 

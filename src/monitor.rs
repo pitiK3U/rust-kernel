@@ -1,25 +1,28 @@
 /// Module that implements basic VGA functions.
 #[allow(non_snake_case)]
 pub mod VGA {
-    use crate::essentials::Singleton;
+    use crate::essentials::Mutex;
 
     /// VGA display width in number of characters.
-    const COLUMNS: u8 = 80;
+    const COLUMNS: usize = 80;
     /// VGA display height in number of characters.
-    const ROWS: u8    = 25;
+    const ROWS: usize    = 25;
+    const TAB_WIDTH: usize = 8;
 
-    /// Main singleton for writing to vga display.
-    pub static mut BUFFER: Singleton<Monitor> = Singleton::<Monitor> {
-        inner: Some(Monitor {
+    use lazy_static::lazy_static;
+
+    lazy_static!{
+        /// Main singleton for writing to vga display.
+        pub static ref BUFFER: Mutex<Monitor> = Mutex::new(Monitor {
             cursor: Cursor {
                 x: 0,
                 y: 0,
             },
-            buffer: 0xb8000 as *mut u16,
+            buffer: unsafe { &mut *(0xb8000 as *mut [[u16; COLUMNS];ROWS]) },
             background_color: Color::Black,
             foreground_color: Color::White,
-        }),
-    };
+        });
+    }
 
     /// Enum used to represent background and foreground color
     /// in vga display.
@@ -70,21 +73,31 @@ pub mod VGA {
         /// Current column position in given row.
         /// [`COLUMNS`] is the maximum value. When reached `x` is reset to `0`
         /// and `y` is increased.
-        x: u8,
+        x: usize,
         /// Current row position in vga display.
         /// [`ROWS`] is the maximum value. When reached [`scroll()`](self::Monitor::scroll) function is called
         /// and cursor gets set to begginning of last row.
-        y: u8,
+        y: usize,
     }
 
     impl Cursor {
         /// Moves cursor by one character.
-        fn update_position(&mut self) {
+        fn update_position(&self) {
+            use crate::port::Port;
+
+            let a = Port::new(0x3d4);
+            let b = Port::new(0x3d5);
+            let pos = self.to_array_index();
+
+            a.write_byte(0x0f);
+            b.write_byte((pos & 0xff) as u8);
+            a.write_byte(0x0e);
+            b.write_byte( ( (pos >> 8) & 0xff) as u8);
         }
 
         /// Returns cursor position as array offset.
-        fn to_array_index(&self) -> u16{
-            (self.y as u16 * COLUMNS as u16 + self.x as u16) as u16
+        fn to_array_index(&self) -> usize{
+            self.y * COLUMNS + self.x
         }
     }
 
@@ -93,95 +106,96 @@ pub mod VGA {
     pub struct Monitor {
         cursor: Cursor,
         /// The buffer of the vga device. All writes and reads should be `volatile`.
-        buffer: *mut u16,
+        buffer: &'static mut [[u16; COLUMNS as usize]; ROWS as usize],
         background_color: Color,
         foreground_color: Color,
+    }
+
+    use core::fmt;
+    impl fmt::Write for Monitor {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            self.write_str(s);
+            Ok(())
+        }
     }
 
     impl Monitor {
         /// Sets backgound color for writes to vga.
         #[inline(always)]
-        pub fn set_background_color(color: &Color) {
-            let mut monitor: Self = unsafe { BUFFER.take() };
-
-            monitor.background_color = color.clone();
-
-            unsafe { BUFFER.give(monitor); }
+        pub fn set_background_color(&mut self, color: &Color) {
+            self.background_color = color.clone();
         }
 
         /// Sets foreground color for writes to vga.
         #[inline(always)]
-        pub fn set_foreground_color(color: &Color) {
-            let mut monitor: Self = unsafe { BUFFER.take() };
-
-            monitor.foreground_color = color.clone();
-
-            unsafe { BUFFER.give(monitor); }
+        pub fn set_foreground_color(&mut self, color: &Color) {
+            self.foreground_color = color.clone();
         }
 
         /// Fills the full screen (`ROWS * COLUMNS`) with blank (`' '`) character
         /// and sets cursor position to top left corner.
-        pub fn clear() {
-            let mut monitor: Self = unsafe { BUFFER.take() };
-            let cursor = &mut monitor.cursor;
+        pub fn clear(&mut self) {
+            let cursor = &mut self.cursor;
 
             let blank_character = vga_char(' ' as u8,
-                                           monitor.background_color,
-                                           monitor.foreground_color);
-            let mut i = 0 as isize;
-            const MAX_OFFSET: isize = (ROWS as isize * COLUMNS as isize) as isize;
-            while i < MAX_OFFSET {
-                unsafe {
-                    monitor.buffer.offset(i).write_volatile(blank_character);
+                                           self.background_color,
+                                           self.foreground_color);
+            let mut row = 0;
+            while row < ROWS {
+                let mut column = 0;
+                while column < COLUMNS {
+                    self.buffer[row][column] = blank_character;
+                    column += 1;
                 }
 
-                i += 1;
+                row += 1;
             }
 
             cursor.x = 0;
             cursor.y = 0;
-
-            unsafe { BUFFER.give(monitor); }
         }
 
         /// Prints `byte` to current position on vga display
         /// includes special characters: `'\n'`, `'\r'`, `'\b'` and `'\t'`.
-        pub fn write_byte(byte: u8) {
-            let mut monitor: Self = unsafe { BUFFER.take() };
-            let cursor = &mut monitor.cursor;
+        pub fn write_byte(&mut self, byte: u8) {
+            let cursor = &mut self.cursor;
 
-            let character = vga_char(byte,
-                                     monitor.background_color,
-                                     monitor.foreground_color);
-            let position  = cursor.to_array_index() as isize;
+            let mut character = vga_char(byte,
+                                     self.background_color,
+                                     self.foreground_color);
 
             // Handle special characters
             match byte {
                 b'\n' => {
                     cursor.x = 0;
                     cursor.y += 1;
+                    return;
                 },
                 b'\r' => {
                     cursor.x = 0;
+                    return;
                 },
                 0x08 =>{
                     cursor.x -= 1;
+                    return;
                 },
                 b'\t' => {
-                    // TODO:
+                    cursor.x = ( (cursor.x % TAB_WIDTH) + 1 ) * TAB_WIDTH;
+                    return;
                 },
                 _ => {}
             }
 
             // MAYBE_REMOVE: it may be wanted to print not printable chars
             if !is_printable(byte) {
-                unsafe { BUFFER.give(monitor); }
-                return;
+                // Print '■' instead of invalid byte
+                character = vga_char(0xfe,
+                                     self.background_color,
+                                     self.foreground_color);
+                //return;
             }
 
-            unsafe {
-                monitor.buffer.offset(position).write_volatile(character);
-            }
+            self.buffer[cursor.y][cursor.x] = character;
 
             cursor.x += 1;
             if cursor.x >= COLUMNS {
@@ -191,14 +205,12 @@ pub mod VGA {
             cursor.update_position();
 
             if cursor.y >= ROWS {
-                monitor.scroll();
+                self.scroll();
             }
-
-            unsafe { BUFFER.give(monitor); }
         }
 
-        pub fn write_str(string: &[u8]) {
-            string.iter().for_each(|byte| Self::write_byte(*byte));
+        pub fn write_str(&mut self, string: &str) {
+            string.bytes().for_each(|byte| self.write_byte(byte));
             /*
             let mut i: usize = 0;
             while i < string.len() {
@@ -212,15 +224,14 @@ pub mod VGA {
         /// Move all rows one row up. First row gets lost
         /// and last row gets filled with spaces.
         fn scroll(&mut self) {
-            const MAX_OFFSET: isize = ((ROWS as isize - 1) * COLUMNS as isize) as isize;
             let mut i = 0;
-            while i < MAX_OFFSET {
-                // move every row one row up
-                // Since vga display is one array, COLUMNS == one row
-                unsafe {
-                    self.buffer.offset(i).write_volatile(
-                        self.buffer.offset(i + COLUMNS as isize).read_volatile()
-                    );
+            while i < ROWS - 1 {
+                let mut column = 0;
+                while column < COLUMNS {
+                    // move every row one row up
+                    // Since vga display is one array, COLUMNS == one row
+                    self.buffer[i][column] = self.buffer[i + 1][column];
+                    column += 1;
                 }
                 i += 1;
             }
@@ -228,12 +239,9 @@ pub mod VGA {
             let blank_character: u16 = vga_char(' ' as u8,
                                                 self.background_color,
                                                 self.foreground_color);
-            i = ((ROWS as isize - 1) * COLUMNS as isize) as isize;
-            while i < MAX_OFFSET {
-                unsafe {
-                    self.buffer.offset(i).write_volatile(blank_character);
-                }
-
+            i = 0;
+            while i < COLUMNS {
+                self.buffer[ROWS - 1][i] = blank_character;
                 i += 1;
             }
         }

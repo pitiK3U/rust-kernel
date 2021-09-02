@@ -30,18 +30,19 @@ impl Selector {
         Self(0)
     }
 
-    // TODO:
-    pub fn set_rpl(&mut self, rpl: u8) -> &mut Self {
+    /// Set Requested Privilaage Level on `Selector`.
+    pub fn set_rpl(mut self, rpl: u8) -> Self {
+        self.0.set_bits(0..=1, rpl as u16);
         self
     }
 
-    pub fn set_table_index(&mut self, table_index: TableIndex) -> &mut Self {
+    pub fn set_table_index(mut self, table_index: TableIndex) -> Self {
         self.0.set_bit(2, table_index == TableIndex::Ldt);
         self
     }
 
-    // TODO:
-    pub fn set_index(&mut self, index: u16) -> &mut Self {
+    /// Sets `Index` bits in `Selector` to given `index` to descriptor table.
+    pub fn set_index(mut self, index: u16) -> Self {
         self.0.set_bits(3..=15, index);
         self
     }
@@ -78,10 +79,9 @@ pub mod IDT {
             Self([Entry::missing(); 16])
         }
 
-        fn set_hadler(&mut self, entry: u8, handler: HandlerFunc) -> &mut TypeAttribute {
-            let mut selector = Selector::new();
-            let selector = selector.set_index(get_code_segment());
-            self.0[entry as usize] = Entry::new(*selector , handler);
+        fn set_handler(&mut self, entry: u8, handler: HandlerFunc) -> &mut TypeAttribute {
+            let selector = Selector::new().set_index(get_code_segment());
+            self.0[entry as usize] = Entry::new(selector , handler);
             &mut self.0[entry as usize].type_attribute
         }
 
