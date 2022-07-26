@@ -1,3 +1,5 @@
+use core::arch::asm;
+
 pub struct Port {
     port: u16,
 }
@@ -5,7 +7,7 @@ pub struct Port {
 impl Port {
     pub fn new(port: u16) -> Self {
         Self {
-            port: port,
+            port,
         }
     }
 

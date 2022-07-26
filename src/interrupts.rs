@@ -1,3 +1,5 @@
+use core::arch::asm;
+
 use bit_field::BitField;
 
 pub type HandlerFunc = extern "C" fn() -> !;
@@ -30,7 +32,7 @@ impl Selector {
         Self(0)
     }
 
-    /// Set Requested Privilaage Level on `Selector`.
+    /// Set Requested Privilage Level on `Selector`.
     pub fn set_rpl(mut self, rpl: u8) -> Self {
         self.0.set_bits(0..=1, rpl as u16);
         self
@@ -59,11 +61,12 @@ fn get_code_segment() -> u16 {
     result
 }
 
+/// Interrupt Descriptor Table
 pub mod IDT {
     use super::*;
 
-    static IDT: Idt = {
-        let mut idt = Idt::new();
+    static IDT: InterruptDescriptorTable = {
+        let mut idt = InterruptDescriptorTable::new();
 
         idt
     };
@@ -72,21 +75,21 @@ pub mod IDT {
         IDT.load();
     }
 
-    pub struct Idt([Entry; 16]);
+    pub struct InterruptDescriptorTable([Entry; 16]);
 
-    impl Idt {
+    impl InterruptDescriptorTable {
         const fn new() -> Self {
             Self([Entry::missing(); 16])
         }
 
-        fn set_handler(&mut self, entry: u8, handler: HandlerFunc) -> &mut TypeAttribute {
+        fn set_handler(&mut self, entry_index: u8, handler: HandlerFunc) -> &mut TypeAttribute {
             let selector = Selector::new().set_index(get_code_segment());
-            self.0[entry as usize] = Entry::new(selector , handler);
-            &mut self.0[entry as usize].type_attribute
+            self.0[entry_index as usize] = Entry::new(selector, handler);
+            &mut self.0[entry_index as usize].type_attribute
         }
 
-        fn load(&self) {
-            let ptr = Dpt {
+        fn load(&'static self) {
+            let ptr = DescriptorTablePointer {
                 base: self as *const _ as usize,
                 size: (core::mem::size_of::<Self>() - 1) as u16,
             };
@@ -101,7 +104,7 @@ pub mod IDT {
     }
 
     #[repr(C,packed)]
-    struct Dpt {
+    struct DescriptorTablePointer {
         size: u16,
         base: usize,
     }
@@ -159,7 +162,7 @@ pub mod IDT {
     }
 
     // Descriptor Privilage Level
-    enum Dpl {
+    enum DescriptorPrivilageLevel {
         /// Typically kernel.
         High   = 0b00,
         Medium = 0b01,
@@ -175,12 +178,13 @@ pub mod IDT {
             Self(0)
         }
 
+        /// **P**: Present bit. Must be set (1) for the descriptor to be valid.
         fn set_present(&mut self, present: bool) -> &mut Self {
             self.0.set_bit(7, present);
             self
         }
 
-        fn set_dpl(&mut self, dpl: Dpl) -> &mut Self {
+        fn set_descriptor_privilage_level(&mut self, dpl: DescriptorPrivilageLevel) -> &mut Self {
             self.0.set_bits(5..=6, dpl as u8);
             self
         }
