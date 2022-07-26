@@ -1,7 +1,23 @@
 /// Module that implements basic VGA functions.
 #[allow(non_snake_case)]
 pub mod VGA {
-    use crate::essentials::Mutex;
+
+    #[macro_export]
+    macro_rules! print {
+        ($($arg:tt)*) => ($crate::monitor::VGA::_print(format_args!($($arg)*)));
+    }
+
+    #[macro_export]
+    macro_rules! println {
+        () => ($crate::print!("\n"));
+        ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+    }
+
+    #[doc(hidden)]
+    pub fn _print(args: fmt::Arguments) {
+        use core::fmt::Write;
+        BUFFER.lock().write_fmt(args).unwrap();
+    }
 
     /// VGA display width in number of characters.
     const COLUMNS: usize = 80;
@@ -9,6 +25,7 @@ pub mod VGA {
     const ROWS: usize    = 25;
     const TAB_WIDTH: usize = 8;
 
+    use crate::essentials::Mutex;
     use lazy_static::lazy_static;
 
     lazy_static!{

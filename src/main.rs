@@ -1,6 +1,5 @@
 //! Hobby/learning simple kernel using rust.
 #![feature(lang_items)]
-#![feature(asm)]
 #![no_std]
 #![no_main]
 
@@ -17,13 +16,9 @@ extern crate bit_field;
 
 
 mod monitor;
-
 mod essentials;
-
 mod interrupts;
-
 mod port;
-
 mod test;
 
 // dev profile: easier to debug panics; can put a breakpoint on `rust_begin_unwind`
@@ -34,11 +29,11 @@ mod test;
 // #[cfg(not(debug_assertions))]
 // use panic_abort as _;
 
-
 use core::panic::PanicInfo;
 
 #[panic_handler]
-fn panic(_panic: &PanicInfo<'_>) -> ! {
+fn panic(info: &PanicInfo<'_>) -> ! {
+    println!("{}", info);
     loop {}
 }
 
@@ -50,18 +45,18 @@ static HELLO: &str = "Hello\tWöorld\n";
 /// Initial kernel function that gets called by `src/boot.s`.
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    use monitor::VGA::*;
 
     interrupts::IDT::init();
 
-    let mut writer = BUFFER.lock();
+    // let mut writer = BUFFER.lock();
 
-    writer.set_background_color(&Color::Black);
-    writer.set_foreground_color(&Color::White);
+    // writer.set_background_color(&Color::Black);
+    // writer.set_foreground_color(&Color::White);
 
-    writer.clear();
+    // writer.clear();
 
-    writer.write_str(HELLO);
+    // writer.write_str(HELLO);
+    // println!("{}", HELLO);
 
     #[cfg(test)]
     test_main();
@@ -71,21 +66,20 @@ pub extern "C" fn _start() -> ! {
 
 #[cfg(test)]
 fn test_runner(tests: &[&dyn Fn()]) {
-    // println!("Running {} tests", tests.len());
-    Monitor::write_str("\nRunning tests\n");
+    use test::*;
+
+    println!("Running {} tests", tests.len());
     for test in tests {
         test();
     }
 
-    test::exit_qemu(QemuExitCode::Success);
+    test::exit_qemu(QemuExitCode::Failed);
 }
 
 #[test_case]
 fn trivial_assertion() {
-    //print!("trivial assertion... ");
-    Monitor::write_str("trivial assertion... ");
+    print!("trivial assertion... ");
     assert_eq!(1, 1);
-    //println!("[ok]");
-    Monitor::write_str("[ok]\n");
+    println!("[ok]");
 }
 
