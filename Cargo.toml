@@ -26,6 +26,7 @@ name = "rkernel"
 # panic = "abort"
 
 [profile.release]
+debug = true
 # panic = "abort"
 codegen-units = 1
 lto = true

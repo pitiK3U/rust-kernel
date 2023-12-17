@@ -2,14 +2,14 @@
 runner = "qemu-system-x86_64 -kernel"
 
 rustflags = [
-"-C", "link-args=-Tlink.ld boot.o",
+"-C", "link-args=-Tlink.ld boot.elf64.o",
 ]
 
 [target.i686-unknown-none]
 runner = "qemu-system-i386 -kernel"
 
 rustflags = [
-"-C", "link-args=-Tlink.ld boot.o",
+"-C", "link-args=-Tlink.ld boot.elf32.o",
 ]
 
 [build]
