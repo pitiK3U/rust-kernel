@@ -2,6 +2,8 @@ use core::arch::asm;
 
 use bit_field::BitField;
 
+use crate::println;
+
 pub type HandlerFunc = extern "C" fn() -> !;
 
 #[derive(PartialEq, Eq)]
@@ -61,15 +63,30 @@ fn get_code_segment() -> u16 {
     result
 }
 
+extern "C" fn div_by_zero() -> ! {
+    println!("Division by Zero!");
+    unsafe {
+        asm!(
+            "cli",
+            "hlt"
+        );
+    }
+    loop {}
+}
+
 /// Interrupt Descriptor Table
 pub mod IDT {
+    use lazy_static::lazy_static;
+
     use super::*;
 
-    static IDT: InterruptDescriptorTable = {
-        let mut idt = InterruptDescriptorTable::new();
-
-        idt
-    };
+    lazy_static! {
+        static ref IDT: InterruptDescriptorTable = {
+            let mut idt = InterruptDescriptorTable::new();
+            idt.set_handler(0, div_by_zero).set_present(true).set_gate(GateType::Trap16).set_descriptor_privilage_level(DescriptorPrivilageLevel::High);
+            idt
+        };
+    }
 
     pub fn init() {
         IDT.load();
@@ -96,7 +113,8 @@ pub mod IDT {
 
             unsafe {
             asm!(
-                "lidt [{}]",
+                "lidt [{}]", // Load the table in memory
+                "sti",       // Enable interrupts
                 in(reg) &ptr,
             );
             }

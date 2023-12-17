@@ -30,6 +30,7 @@ mod test;
 // use panic_abort as _;
 
 use core::panic::PanicInfo;
+use core::arch::asm;
 
 #[panic_handler]
 fn panic(info: &PanicInfo<'_>) -> ! {
@@ -56,7 +57,14 @@ pub extern "C" fn _start() -> ! {
     // writer.clear();
 
     // writer.write_str(HELLO);
-    // println!("{}", HELLO);
+    println!("{}", HELLO);
+    let mut x = 1;
+    unsafe {
+        asm!(
+            "div {tmp:x}",
+            tmp = in(reg) 0,
+        );
+    }
 
     #[cfg(test)]
     test_main();
